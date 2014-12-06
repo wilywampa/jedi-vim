@@ -254,7 +254,7 @@ function! jedi#complete_opened()
         " only go down if it is visible, user-enabled and the longest option is set
         return "\<Down>"
     end
-    return ""
+    return "\<C-p>"
 endfunction
 
 
