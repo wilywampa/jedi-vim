@@ -236,7 +236,9 @@ endfunction
 
 
 function! jedi#complete_string(is_popup_on_dot)
-
+    if &omnifunc !=# 'jedi#completions'
+        return ''
+    endif
     if a:is_popup_on_dot && !(g:jedi#popup_on_dot && jedi#do_popup_on_dot_in_highlight())
         return ''
 
