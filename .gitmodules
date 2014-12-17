@@ -1,3 +1,3 @@
 [submodule "jedi"]
 	path = jedi
-	url = https://github.com/wilywampa/jedi.git
+	url = https://github.com/davidhalter/jedi.git
