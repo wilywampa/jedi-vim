@@ -202,7 +202,7 @@ function! s:save_first_col()
                     return ww1 + ww2 + 2
                 endif
             elseif startwin == 2
-                if ww2 + ww3 + 2 == &columns
+                if ww2 + ww3 + 1 == &columns
                     return 0
                 else
                     return ww1 + 1
