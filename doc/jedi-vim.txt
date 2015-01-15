@@ -314,7 +314,7 @@ plugin.
 Upon initialization, jedi-vim performs the following steps:
 
 1. Set the current buffers 'omnifunc' to its own completion function
-   `jedi#complete`
+   `jedi#completions`
 2. Create mappings to commands specified in |jedi-vim-keybindings|
 3. Call `jedi#configure_call_signatures()` if
    `g:jedi#show_call_signatures` is set
@@ -368,7 +368,7 @@ When doing completion, jedi-vim shows the docstring of the currently selected
 item in a preview window. By default, this window is being closed after
 insertion of a completion item.
 
-Set this to 1 to leave the preview window open even after leaving insert mode.
+Set this to 0 to leave the preview window open even after leaving insert mode.
 This could be useful if you want to browse longer docstrings.
 
 Options: 0 or 1
