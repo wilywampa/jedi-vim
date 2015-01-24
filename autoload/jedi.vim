@@ -294,6 +294,7 @@ let s:deprecations = {
 " defaults for jedi-vim
 " ------------------------------------------------------------------------
 let s:settings = {
+    \ 'use_tag_stack': 0,
     \ 'use_tabs_not_buffers': 1,
     \ 'use_splits_not_buffers': 1,
     \ 'auto_initialization': 1,

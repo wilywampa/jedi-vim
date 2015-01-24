@@ -7,6 +7,9 @@ import traceback  # for exception output
 import re
 import os
 import sys
+import tempfile
+import string
+import random
 from shlex import split as shsplit
 try:
     from itertools import zip_longest
@@ -188,12 +191,26 @@ def goto(is_definition=False, is_related_name=False, no_output=False):
                     echo_highlight("Builtin modules cannot be displayed (%s)."
                                    % d.module_path)
             else:
-                if d.module_path != vim.current.buffer.name:
-                    result = new_buffer(d.module_path)
-                    if not result:
-                        return
-                vim.current.window.cursor = d.line, d.column
-                vim_command('normal! zt')  # cursor at top of screen
+                if vim_eval('g:jedi#use_tag_stack') == '1':
+                    with tempfile.NamedTemporaryFile('w') as f:
+                        while True:
+                            tagname = ''.join([random.choice(string.lowercase)
+                                               for _ in range(20)])
+                            if vim_eval('empty("%s")' % tagname):
+                                break
+                        f.write('{0}\t{1}\t{2}'.format(tagname, d.module_path,
+                            'normal! {0}G{1}|zt'.format(d.line, d.column)))
+                        f.seek(0)
+                        vim.command('set tags+=%s' % f.name)
+                        vim.command('tjump %s' % tagname)
+                        vim.command('set tags-=%s' % f.name)
+                else:
+                    if d.module_path != vim.current.buffer.name:
+                        result = new_buffer(d.module_path)
+                        if not result:
+                            return
+                    vim.current.window.cursor = d.line, d.column
+                    vim_command('normal! zt')  # cursor at top of screen
         else:
             # multiple solutions
             lst = []
