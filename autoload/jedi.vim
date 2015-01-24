@@ -159,11 +159,13 @@ function! jedi#configure_call_signatures()
         " Need to track changes to avoid multiple undo points for a single edit
         if v:version >= 704 || has("patch-7.3.867")
             let b:normaltick = b:changedtick
-            autocmd TextChanged,InsertLeave,BufWinEnter <buffer> let b:normaltick = b:changedtick
+            autocmd TextChanged,InsertLeave,BufWinEnter,BufEnter,WinEnter
+                \ <buffer> let b:normaltick = b:changedtick
         endif
         autocmd InsertEnter <buffer> let g:jedi#first_col = s:save_first_col()
     endif
     autocmd InsertLeave <buffer> Python jedi_vim.clear_call_signatures()
+    autocmd InsertLeave <buffer> Python jedi_vim.invalidate_signatures_cache()
     autocmd CursorMovedI <buffer> Python jedi_vim.show_call_signatures()
 endfunction
 
@@ -179,8 +181,41 @@ function! s:save_first_col()
     let startwin = winnr()
     let startaltwin = winnr('#')
     let winwidth = winwidth(0)
+    let used_wincmds = 0
 
     try
+        if winwidth == &columns
+            return 0
+        elseif winnr('$') == 2
+            return startwin == 1 ? 0 : (winwidth(1) + 1)
+        elseif winnr('$') == 3
+            if startwin == 1
+                return 0
+            endif
+            let ww1 = winwidth(1)
+            let ww2 = winwidth(2)
+            let ww3 = winwidth(3)
+            if ww1 + ww2 + ww3 + 2 == &columns
+                if startwin == 2
+                    return ww1 + 1
+                else
+                    return ww1 + ww2 + 2
+                endif
+            elseif startwin == 2
+                if ww2 + ww3 + 1 == &columns
+                    return 0
+                else
+                    return ww1 + 1
+                endif
+            else " startwin == 3
+                if ww2 + ww3 + 2 == &columns
+                    return ww2 + 1
+                else
+                    return ww1 + 1
+                endif
+            endif
+        endif
+        let used_wincmds = 1
         wincmd h
         let win_on_left = winnr() == startwin
         if win_on_left
@@ -200,17 +235,19 @@ function! s:save_first_col()
         endif
     finally
         let &eventignore = l:eventignore
-        execute startaltwin."wincmd w"
-        execute startwin."wincmd w"
-        " If the event that triggered InsertEnter made a change (e.g. open a
-        " new line, substitude a word), join that change with the rest of this
-        " edit.
-        if exists('b:normaltick') && b:normaltick != b:changedtick
-            try
-                undojoin
-            catch /^Vim\%((\a\+)\)\=:E790/
-                " This can happen if an undo happens during a :normal command.
-            endtry
+        if used_wincmds
+            execute startaltwin."wincmd w"
+            execute startwin."wincmd w"
+            " If the event that triggered InsertEnter made a change (e.g. open a
+            " new line, substitude a word), join that change with the rest of this
+            " edit.
+            if exists('b:normaltick') && b:normaltick != b:changedtick
+                try
+                    undojoin
+                catch /^Vim\%((\a\+)\)\=:E790/
+                    " This can happen if an undo happens during a :normal command.
+                endtry
+            endif
         endif
     endtry
 endfunction
@@ -235,7 +272,9 @@ endfunction
 
 
 function! jedi#complete_string(is_popup_on_dot)
-
+    if &omnifunc !=# 'jedi#completions'
+        return ''
+    endif
     if a:is_popup_on_dot && !(g:jedi#popup_on_dot && jedi#do_popup_on_dot_in_highlight())
         return ''
 
@@ -253,7 +292,7 @@ function! jedi#complete_opened()
         " only go down if it is visible, user-enabled and the longest option is set
         return "\<Down>"
     end
-    return ""
+    return "\<C-p>"
 endfunction
 
 
