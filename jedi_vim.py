@@ -200,8 +200,9 @@ def goto(is_definition=False, is_related_name=False, no_output=False):
                 if vim_eval('g:jedi#use_tag_stack') == '1':
                     with tempfile.NamedTemporaryFile('w') as f:
                         while True:
-                            tagname = ''.join([random.choice(string.lowercase)
-                                               for _ in range(20)])
+                            tagname = d.name + ' ' + ''.join(
+                                [random.choice(string.lowercase)
+                                 for _ in range(4)])
                             if vim_eval('empty("%s")' % tagname):
                                 break
                         f.write('{0}\t{1}\t{2}'.format(tagname, d.module_path,
