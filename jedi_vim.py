@@ -205,7 +205,7 @@ def goto(is_definition=False, is_related_name=False, no_output=False):
                                 [random.choice(string.lowercase)
                                  for _ in range(4)])
                         f.write('{0}\t{1}\t{2}'.format(tagname, d.module_path,
-                            'normal! {0}G{1}|zt'.format(d.line, d.column)))
+                            'call cursor({0}, {1})'.format(d.line, d.column)))
                         f.seek(0)
                         vim.command('set tags+=%s' % f.name)
                         vim.command('tjump %s' % tagname)
