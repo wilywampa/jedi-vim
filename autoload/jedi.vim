@@ -159,7 +159,6 @@ function! jedi#configure_call_signatures()
         autocmd InsertEnter <buffer> let g:jedi#first_col = s:save_first_col()
     endif
     autocmd InsertLeave <buffer> Python jedi_vim.clear_call_signatures()
-    autocmd InsertLeave <buffer> Python jedi_vim.invalidate_signatures_cache()
     autocmd CursorMovedI <buffer> Python jedi_vim.show_call_signatures()
 endfunction
 
