@@ -216,7 +216,6 @@ def goto(is_definition=False, is_related_name=False, no_output=False):
                         if not result:
                             return
                     vim.current.window.cursor = d.line, d.column
-                    vim_command('normal! zt')  # cursor at top of screen
         else:
             # multiple solutions
             lst = []
@@ -521,8 +520,11 @@ def new_buffer(path, options=''):
             'top': 'topleft split',
             'left': 'topleft vsplit',
             'right': 'botright vsplit',
-            'bottom': 'botright split'
+            'bottom': 'botright split',
+            'winwidth': 'vs'
         }
+        if user_split_option == 'winwidth' and vim.current.window.width <= 2 * int(vim_eval("&textwidth ? &textwidth : 80")):
+            split_options['winwidth'] = 'sp'
         if user_split_option not in split_options:
             print('g:jedi#use_splits_not_buffers value is not correct, valid options are: %s' % ','.join(split_options.keys()))
         else:

@@ -44,6 +44,8 @@ Markus Koller (@toupeira)
 Justin Cheevers @justincheevers
 Talha Ahmed (@talha81) <talha.ahmed@gmail.com>
 Matthew Tylee Atkinson (@matatk)
+Pedro Ferrari (@petobens)
+Dave Honneffer (@pearofducks)
 
 
 @something are github user names.
