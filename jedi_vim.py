@@ -16,56 +16,10 @@ try:
 except ImportError:
     from itertools import izip_longest as zip_longest  # Python 2
 
-import vim
-import jedi
 
 is_py3 = sys.version_info[0] >= 3
 if is_py3:
     unicode = str
-
-
-def catch_and_print_exceptions(func):
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except (Exception, vim.error):
-            print(traceback.format_exc())
-            return None
-    return wrapper
-
-
-class VimError(Exception):
-    def __init__(self, message, throwpoint, executing):
-        super(type(self), self).__init__(message)
-        self.throwpoint = throwpoint
-        self.executing = executing
-
-    def __str__(self):
-        return self.message + '; created by: ' + repr(self.executing)
-
-
-def _catch_exception(string, is_eval):
-    """
-    Interface between vim and python calls back to it.
-    Necessary, because the exact error message is not given by `vim.error`.
-    """
-    e = 'jedi#_vim_exceptions(%s, %s)'
-    result = vim.eval(e % (repr(PythonToVimStr(string, 'UTF-8')), is_eval))
-    if 'exception' in result:
-        raise VimError(result['exception'], result['throwpoint'], string)
-    return result['result']
-
-
-def vim_eval(string):
-    return _catch_exception(string, 1)
-
-
-def vim_command(string):
-    _catch_exception(string, 0)
-
-
-def echo_highlight(msg):
-    vim_command('echohl WarningMsg | echom "%s" | echohl None' % msg)
 
 
 class PythonToVimStr(unicode):
@@ -90,6 +44,89 @@ class PythonToVimStr(unicode):
         return '"%s"' % s.replace('\\', '\\\\').replace('"', r'\"')
 
 
+class VimError(Exception):
+    def __init__(self, message, throwpoint, executing):
+        super(type(self), self).__init__(message)
+        self.message = message
+        self.throwpoint = throwpoint
+        self.executing = executing
+
+    def __str__(self):
+        return self.message + '; created by: ' + repr(self.executing)
+
+
+def _catch_exception(string, is_eval):
+    """
+    Interface between vim and python calls back to it.
+    Necessary, because the exact error message is not given by `vim.error`.
+    """
+    e = 'jedi#_vim_exceptions(%s, %s)'
+    result = vim.eval(e % (repr(PythonToVimStr(string, 'UTF-8')), is_eval))
+    if 'exception' in result:
+        raise VimError(result['exception'], result['throwpoint'], string)
+    return result['result']
+
+
+def vim_command(string):
+    _catch_exception(string, 0)
+
+
+def vim_eval(string):
+    return _catch_exception(string, 1)
+
+
+def no_jedi_warning():
+    vim.command('echohl WarningMsg | echom "Please install Jedi if you want to use jedi-vim." | echohl None')
+
+
+def echo_highlight(msg):
+    vim_command('echohl WarningMsg | echom "%s" | echohl None' % msg)
+
+
+import vim
+try:
+    import jedi
+except ImportError:
+    no_jedi_warning()
+    jedi = None
+else:
+    try:
+        version = jedi.__version__
+    except Exception as e:  # e.g. AttributeError
+        echo_highlight("Could not load jedi python module: {}".format(e))
+        jedi = None
+    else:
+        if isinstance(version, str):
+            # the normal use case, now.
+            from jedi import utils
+            version = utils.version_info()
+        if version < (0, 7):
+            echo_highlight('Please update your Jedi version, it is too old.')
+
+
+def catch_and_print_exceptions(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (Exception, vim.error):
+            print(traceback.format_exc())
+            return None
+    return wrapper
+
+
+def _check_jedi_availability(show_error=False):
+    def func_receiver(func):
+        def wrapper(*args, **kwargs):
+            if jedi is None:
+                if show_error:
+                    no_jedi_warning()
+                return
+            else:
+                return func(*args, **kwargs)
+        return wrapper
+    return func_receiver
+
+
 @catch_and_print_exceptions
 def get_script(source=None, column=None):
     jedi.settings.additional_dynamic_modules = \
@@ -104,6 +141,7 @@ def get_script(source=None, column=None):
     return jedi.Script(source, row, column, buf_path, encoding)
 
 
+@_check_jedi_availability(show_error=False)
 @catch_and_print_exceptions
 def completions():
     row, column = vim.current.window.cursor
@@ -159,6 +197,7 @@ def completions():
         vim.command('return ' + strout)
 
 
+@_check_jedi_availability(show_error=True)
 @catch_and_print_exceptions
 def goto(is_definition=False, is_related_name=False, no_output=False):
     definitions = []
@@ -189,7 +228,7 @@ def goto(is_definition=False, is_related_name=False, no_output=False):
                     echo_highlight("Cannot get the definition of Python keywords.")
                 else:
                     echo_highlight("Builtin modules cannot be displayed (%s)."
-                                   % d.module_path)
+                                   % d.desc_with_module)
             else:
                 if vim_eval('g:jedi#use_tag_stack') == '1':
                     with tempfile.NamedTemporaryFile('w') as f:
@@ -221,10 +260,11 @@ def goto(is_definition=False, is_related_name=False, no_output=False):
                                     lnum=d.line, col=d.column + 1,
                                     text=PythonToVimStr(d.description)))
             vim_eval('setqflist(%s)' % repr(lst))
-            vim_eval('jedi#add_goto_window()')
+            vim_eval('jedi#add_goto_window(' + str(len(lst)) + ')')
     return definitions
 
 
+@_check_jedi_availability(show_error=True)
 @catch_and_print_exceptions
 def show_documentation():
     script = get_script()
@@ -247,6 +287,7 @@ def show_documentation():
         text = ('\n' + '-' * 79 + '\n').join(docs)
         vim.command('let l:doc = %s' % repr(PythonToVimStr(text)))
         vim.command('let l:doc_lines = %s' % len(text.split('\n')))
+    return True
 
 
 @catch_and_print_exceptions
@@ -257,19 +298,24 @@ def clear_call_signatures():
         return
     cursor = vim.current.window.cursor
     e = vim_eval('g:jedi#call_signature_escape')
-    regex = r'%sjedi=([0-9]+), ([^%s]*)%s.*%sjedi%s'.replace('%s', e)
+    # We need two turns here to search and replace certain lines:
+    # 1. Search for a line with a call signature and save the appended
+    #    characters
+    # 2. Actually replace the line and redo the status quo.
+    py_regex = r'%sjedi=([0-9]+), (.*?)%s.*?%sjedi%s'.replace('%s', e)
     for i, line in enumerate(vim.current.buffer):
-        match = re.search(r'%s' % regex, line)
+        match = re.search(py_regex, line)
         if match is not None:
-            vim_regex = r'\v' + regex.replace('=', r'\=') + '.{%s}' \
-                % int(match.group(1))
-            vim_command(r'try | %s,%ss/%s/\2/g | catch | endtry'
-                        % (i + 1, i + 1, vim_regex))
-            vim_eval('histdel("search", -1)')
-            vim_command('let @/ = histget("search", -1)')
+            # Some signs were added to minimize syntax changes due to call
+            # signatures. We have to remove them again. The number of them is
+            # specified in `match.group(1)`.
+            after = line[match.end() + int(match.group(1)):]
+            line = line[:match.start()] + match.group(2) + after
+            vim.current.buffer[i] = line
     vim.current.window.cursor = cursor
 
 
+@_check_jedi_availability(show_error=False)
 @catch_and_print_exceptions
 def show_call_signatures(signatures=()):
     if vim_eval("has('conceal') && g:jedi#show_call_signatures") == '0':
@@ -389,6 +435,7 @@ def cmdline_call_signatures(signatures):
                     % (spaces, signatures[0].call_name, text))
 
 
+@_check_jedi_availability(show_error=True)
 @catch_and_print_exceptions
 def rename():
     if not int(vim.eval('a:0')):
@@ -401,10 +448,10 @@ def rename():
         vim_command('autocmd InsertLeave <buffer> call jedi#rename(1)')
         vim_command('augroup END')
 
+        vim_command("let s:jedi_replace_orig = expand('<cword>')")
         vim_command('normal! diw')
         vim_command(':startinsert')
     else:
-        window_path = vim.current.buffer.name
         # reset autocommand
         vim_command('autocmd! jedi_rename InsertLeave')
 
@@ -414,33 +461,67 @@ def rename():
         vim_command('normal! u')  # undo the space at the end
         vim.current.window.cursor = cursor
 
-        if replace is None:
-            echo_highlight('No rename possible, if no name is given.')
-        else:
-            temp_rename = goto(is_related_name=True, no_output=True)
-            # sort the whole thing reverse (positions at the end of the line
-            # must be first, because they move the stuff before the position).
-            temp_rename = sorted(temp_rename, reverse=True,
-                                 key=lambda x: (x.module_path, x.start_pos))
-            for r in temp_rename:
-                if r.in_builtin_module():
-                    continue
+        return do_rename(replace)
 
-                if vim.current.buffer.name != r.module_path:
-                    result = new_buffer(r.module_path)
-                    if not result:
-                        return
 
-                vim.current.window.cursor = r.start_pos
-                vim_command('normal! cw%s' % replace)
+def rename_visual():
+    replace = vim.eval('input("Rename to: ")')
+    orig = vim.eval('getline(".")[(getpos("\'<")[2]-1):getpos("\'>")[2]]')
+    do_rename(replace, orig)
 
-            result = new_buffer(window_path)
+
+def do_rename(replace, orig = None):
+    if replace is None:
+        echo_highlight('No rename possible, if no name is given.')
+        return
+
+    if orig is None:
+        orig = vim_eval('s:jedi_replace_orig')
+
+    # Save original window / tab.
+    saved_tab = int(vim_eval('tabpagenr()'))
+    saved_win = int(vim_eval('winnr()'))
+
+    temp_rename = goto(is_related_name=True, no_output=True)
+    # sort the whole thing reverse (positions at the end of the line
+    # must be first, because they move the stuff before the position).
+    temp_rename = sorted(temp_rename, reverse=True,
+                         key=lambda x: (x.module_path, x.start_pos))
+    buffers = set()
+    for r in temp_rename:
+        if r.in_builtin_module():
+            continue
+
+        if os.path.abspath(vim.current.buffer.name) != r.module_path:
+            result = new_buffer(r.module_path)
             if not result:
-                return
-            vim.current.window.cursor = cursor
-            echo_highlight('Jedi did %s renames!' % len(temp_rename))
+                echo_highlight("Jedi-vim: failed to create buffer window for {}!".format(r.module_path))
+                continue
+
+        buffers.add(vim.current.buffer.name)
+
+        # Save view.
+        saved_view = vim_eval('winsaveview()')
+
+        # Replace original word.
+        vim.current.window.cursor = r.start_pos
+        vim_command('normal! c{:d}l{}'.format(len(orig), replace))
+
+        # Restore view.
+        vim_command('call winrestview(%s)' % PythonToVimStr(saved_view))
+
+    # Restore previous tab and window.
+    vim_command('tabnext {:d}'.format(saved_tab))
+    vim_command('{:d}wincmd w'.format(saved_win))
+
+    if len(buffers) > 1:
+        echo_highlight('Jedi did {:d} renames in {:d} buffers!'.format(
+            len(temp_rename), len(buffers)))
+    else:
+        echo_highlight('Jedi did {:d} renames!'.format(len(temp_rename)))
 
 
+@_check_jedi_availability(show_error=True)
 @catch_and_print_exceptions
 def py_import():
     # args are the same as for the :edit command
@@ -536,6 +617,8 @@ def _tabnew(path, options=''):
                 if buf_path == path:
                     # tab exists, just switch to that tab
                     vim_command('tabfirst | tabnext %i' % (tab_nr + 1))
+                    # Goto the buffer's window.
+                    vim_command('exec bufwinnr(%i) . " wincmd w"' % (buf_nr + 1))
                     break
         else:
             continue
@@ -551,12 +634,3 @@ def escape_file_path(path):
 
 def print_to_stdout(level, str_out):
     print(str_out)
-
-
-version = jedi.__version__
-if isinstance(version, str):
-    # the normal use case, now.
-    from jedi import utils
-    version = utils.version_info()
-if version < (0, 7):
-    echo_highlight('Please update your Jedi version, it is to old.')

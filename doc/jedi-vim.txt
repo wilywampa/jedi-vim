@@ -280,7 +280,8 @@ Function: `jedi#show_documentation()`
 Default: <K>				Show pydoc documentation
 
 This shows the pydoc documentation for the item currently under the cursor.
-The documentation is opened in a horizontally split buffer.
+The documentation is opened in a horizontally split buffer. The height of this
+buffer is controlled by `g:jedi#max_doc_height` (set by default to 30).
 
 ------------------------------------------------------------------------------
 5.5. `g:jedi#rename_command`		*g:jedi#rename_command*
@@ -336,9 +337,11 @@ Default: 1 (Perform automatic initialization)
 ------------------------------------------------------------------------------
 6.2. `g:jedi#auto_vim_configuration`	*g:jedi#auto_vim_configuration*
 
-Jedi-vim sets 'completeopt' to `menuone,longest,preview` by default. It also
-remaps <Ctrl-C> to <Esc> in insert mode. If you want to keep your own
-configuration, disable this setting.
+Jedi-vim sets 'completeopt' to `menuone,longest,preview` by default, if
+'completeopt' is not changed from Vim's default.
+It also remaps <Ctrl-C> to <Esc> in insert mode.
+
+If you want to keep your own configuration, disable this setting.
 
 Options: 0 or 1
 Default: 1 (Set 'completeopt' and mapping as described above)
@@ -462,7 +465,7 @@ or set directly using this function, which has the same name as the variable:
 Function: `jedi#force_py_version(py_version)`
 
 Options: 2 or 3
-Default: 2
+Default: "auto" (will use sys.version_info from "python" in your $PATH)
 
 ==============================================================================
 7. Testing				*jedi-vim-testing*
