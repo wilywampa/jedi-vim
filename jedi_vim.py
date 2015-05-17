@@ -76,11 +76,14 @@ def vim_eval(string):
 
 
 def no_jedi_warning():
-    vim.command('echohl WarningMsg | echom "Please install Jedi if you want to use jedi-vim." | echohl None')
+    vim.command('echohl WarningMsg'
+                '| echom "Please install Jedi if you want to use jedi-vim."'
+                '| echohl None')
 
 
 def echo_highlight(msg):
-    vim_command('echohl WarningMsg | echom "%s" | echohl None' % msg)
+    vim_command('echohl WarningMsg | echom "{}" | echohl None'.format(
+        msg.replace('"', '\\"')))
 
 
 import vim
@@ -199,24 +202,34 @@ def completions():
 
 @_check_jedi_availability(show_error=True)
 @catch_and_print_exceptions
-def goto(is_definition=False, is_related_name=False, no_output=False):
-    definitions = []
+def goto(mode="goto", no_output=False):
+    """
+    :param str mode: "related_name", "definition", "assignment", "auto"
+    :return: list of definitions/assignments
+    :rtype: list
+    """
     script = get_script()
     try:
-        if is_related_name:
+        if mode == "goto":
+            definitions = [x for x in script.goto_definitions()
+                           if not x.in_builtin_module()]
+            if not definitions:
+                definitions = script.goto_assignments()
+        elif mode == "related_name":
             definitions = script.usages()
-        elif is_definition:
+        elif mode == "definition":
             definitions = script.goto_definitions()
-        else:
+        elif mode == "assignment":
             definitions = script.goto_assignments()
     except jedi.NotFoundError:
         echo_highlight("Cannot follow nothing. Put your cursor on a valid name.")
+        definitions = []
     else:
         if no_output:
             return definitions
         if not definitions:
             echo_highlight("Couldn't find any definitions for this.")
-        elif len(definitions) == 1 and not is_related_name:
+        elif len(definitions) == 1 and mode != "related_name":
             # just add some mark to add the current position to the jumplist.
             # this is ugly, because it overrides the mark for '`', so if anyone
             # has a better idea, let me know.
@@ -247,7 +260,7 @@ def goto(is_definition=False, is_related_name=False, no_output=False):
                     if d.module_path != vim.current.buffer.name:
                         result = new_buffer(d.module_path)
                         if not result:
-                            return
+                            return []
                     vim.current.window.cursor = d.line, d.column
         else:
             # multiple solutions
@@ -439,29 +452,39 @@ def cmdline_call_signatures(signatures):
 @catch_and_print_exceptions
 def rename():
     if not int(vim.eval('a:0')):
-        _rename_cursor = vim.current.window.cursor
-
-        vim_command('normal A ')  # otherwise startinsert doesn't work well
-        vim.current.window.cursor = _rename_cursor
-
         vim_command('augroup jedi_rename')
         vim_command('autocmd InsertLeave <buffer> call jedi#rename(1)')
         vim_command('augroup END')
 
         vim_command("let s:jedi_replace_orig = expand('<cword>')")
         vim_command('normal! diw')
-        vim_command(':startinsert')
+        vim_command("let s:jedi_changedtick = b:changedtick")
+        vim_command('startinsert')
+
     else:
-        # reset autocommand
+        # Remove autocommand.
         vim_command('autocmd! jedi_rename InsertLeave')
 
-        replace = vim_eval("expand('<cword>')")
-        vim_command('normal! u')  # undo new word
+        # Get replacement, if there is something on the cursor.
+        # This won't be the case when the user ends insert mode right away,
+        # and `<cword>` would pick up the nearest word instead.
+        if vim_eval('getline(".")[getpos(".")[2]-1]') != ' ':
+            replace = vim_eval("expand('<cword>')")
+        else:
+            replace = None
+
         cursor = vim.current.window.cursor
-        vim_command('normal! u')  # undo the space at the end
+
+        # Undo new word, but only if something was changed, which is not the
+        # case when ending insert mode right away.
+        if vim_eval('b:changedtick != s:jedi_changedtick') == '1':
+            vim_command('normal! u')  # Undo new word.
+        vim_command('normal! u')  # Undo diw.
+
         vim.current.window.cursor = cursor
 
-        return do_rename(replace)
+        if replace:
+            return do_rename(replace)
 
 
 def rename_visual():
@@ -470,9 +493,9 @@ def rename_visual():
     do_rename(replace, orig)
 
 
-def do_rename(replace, orig = None):
-    if replace is None:
-        echo_highlight('No rename possible, if no name is given.')
+def do_rename(replace, orig=None):
+    if not len(replace):
+        echo_highlight('No rename possible without name.')
         return
 
     if orig is None:
@@ -482,8 +505,8 @@ def do_rename(replace, orig = None):
     saved_tab = int(vim_eval('tabpagenr()'))
     saved_win = int(vim_eval('winnr()'))
 
-    temp_rename = goto(is_related_name=True, no_output=True)
-    # sort the whole thing reverse (positions at the end of the line
+    temp_rename = goto(mode="related_name", no_output=True)
+    # Sort the whole thing reverse (positions at the end of the line
     # must be first, because they move the stuff before the position).
     temp_rename = sorted(temp_rename, reverse=True,
                          key=lambda x: (x.module_path, x.start_pos))
@@ -501,14 +524,14 @@ def do_rename(replace, orig = None):
         buffers.add(vim.current.buffer.name)
 
         # Save view.
-        saved_view = vim_eval('winsaveview()')
+        saved_view = vim_eval('string(winsaveview())')
 
         # Replace original word.
         vim.current.window.cursor = r.start_pos
         vim_command('normal! c{:d}l{}'.format(len(orig), replace))
 
         # Restore view.
-        vim_command('call winrestview(%s)' % PythonToVimStr(saved_view))
+        vim_command('call winrestview(%s)' % saved_view)
 
     # Restore previous tab and window.
     vim_command('tabnext {:d}'.format(saved_tab))
