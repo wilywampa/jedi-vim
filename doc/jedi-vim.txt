@@ -41,6 +41,7 @@ Contents				*jedi-vim-contents*
     6.9. completions_enabled		|g:jedi#completions_enabled|
     6.10. use_splits_not_buffers	|g:jedi#use_splits_not_buffers|
     6.11. force_py_version              |g:jedi#force_py_version|
+    6.12. use_tag_stack                 |g:jedi#use_tag_stack|
 7. Testing				|jedi-vim-testing|
 8. Contributing				|jedi-vim-contributing|
 9. License				|jedi-vim-license|
@@ -481,6 +482,15 @@ Function: `jedi#force_py_version(py_version)`
 
 Options: 2 or 3
 Default: "auto" (will use sys.version_info from "python" in your $PATH)
+
+------------------------------------------------------------------------------
+6.9. `g:jedi#use_tag_stack`			*g:jedi#use_tag_stack*
+
+Write results of |jedi#goto| to a temporary file and use the *:tjump* command
+to enable full *tagstack* functionality.
+
+Options: 0 or 1
+Default: 1
 
 ==============================================================================
 7. Testing				*jedi-vim-testing*
