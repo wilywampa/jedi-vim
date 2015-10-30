@@ -265,11 +265,11 @@ def goto(mode="goto", no_output=False):
                         try:
                             # Clear wildignore to ensure tag file isn't ignored
                             vim.command('set wildignore=')
-                            vim.command('set tags=%s' % f.name)
+                            vim.command('let &tags = %s' % repr(PythonToVimStr(f.name)))
                             vim.command('tjump %s' % tagname)
                         finally:
-                            vim.command('set tags=%s' % old_tags)
-                            vim.command('let &wildignore = "%s"' % old_wildignore)
+                            vim.command('let &tags = %s' % repr(PythonToVimStr(old_tags)))
+                            vim.command('let &wildignore = %s' % repr(PythonToVimStr(old_wildignore)))
                 vim.current.window.cursor = d.line, d.column
         else:
             # multiple solutions
